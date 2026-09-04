@@ -86,7 +86,7 @@ td b{font-weight:600}
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
 let proxies={}, selector='', now='', modes=[], curMode='';
-let allNames=[], delayCache={}, testing={}, labelMap={};
+let allNames=[], delayCache={}, testing={}, switching={}, labelMap={};
 let maxUp=1, maxDown=1;
 let tab='nodes';
 
@@ -157,29 +157,31 @@ body.innerHTML=names.map(n=>{
 const p=proxies[n]||{};
 const d=delayCache[n];
 const isSel=n===now;
-const latTxt=d?(d+'ms'):(testing[n]?'…':'-');
-const dc=testing[n]?'':latC(d);
+const busy=testing[n]||switching[n];
+const latTxt=d?(d+'ms'):(busy?'…':'-');
+const dc=busy?'':latC(d);
 return '<tr>'
-+'<td>'+(isSel?'<span class="sel">●</span>':'')+'</td>'
++'<td>'+(isSel?'<span class="sel">●</span>':'')+(switching[n]?'<span class="sel" style="color:#eab308">↻</span>':'')+'</td>'
 +'<td title="'+n+'"><b>'+displayLabel(n)+'</b><div class="node-id">'+n+'</div></td>'
 +'<td class="tag">'+(p.type||'-')+'</td>'
 +'<td class="'+dc+'">'+latTxt+'</td>'
-+'<td><button class="icon-btn" onclick="selectNode(\''+n+'\')" title="select" '+(isSel?'disabled':'')+'>use</button> '
-+'<button class="icon-btn" onclick="testOne(\''+n+'\')" title="test delay" '+(testing[n]?'disabled':'')+'>test</button></td>'
++'<td><button class="icon-btn" onclick="selectNode(\''+n+'\')" title="select" '+(isSel||busy?'disabled':'')+'>use</button> '
++'<button class="icon-btn" onclick="testOne(\''+n+'\')" title="test delay" '+(busy?'disabled':'')+'>test</button></td>'
 +'</tr>';
 }).join('');
 if(window.lucide)lucide.createIcons();
 }
 async function selectNode(n){
-// 1. switch the selector
+// Loading: show spinner + disable controls until the switch is live. The
+// selector PUT only routes *new* connections; clearing live connections makes
+// the switch take effect immediately without bouncing the VPN tunnel.
+switching[n]=true;renderNodes();
+try{
 await api('/proxies/'+encodeURIComponent(selector),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});
 now=n;renderNodes();
-// 2. drop live connections so they rebuild through the new node. The kernel
-// only routes *new* connections through the just-selected node; established
-// keep-alive connections keep their old egress. Clearing them (not bouncing
-// the tunnel) makes the switch take effect immediately without dropping the
-// VPN. Best-effort: ignore errors so a failed clear still shows the new now.
-try{await api('/connections',{method:'DELETE'});}catch(e){}
+await api('/connections',{method:'DELETE'});
+}catch(e){ /* best-effort: the selector may still have switched */ }
+finally{switching[n]=false;renderNodes();}
 }
 async function testOne(n){
 testing[n]=true;renderNodes();
