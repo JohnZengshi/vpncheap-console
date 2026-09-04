@@ -93,11 +93,10 @@ let tab='nodes';
 async function api(path, opts){
 const r=await fetch('/api'+path, opts);
 if(!r.ok) throw new Error(r.status+' '+await r.text());
-// PUT/DELETE to the Clash API return 204 No Content (empty body). Only try
-// to parse JSON when there is a body, otherwise .json() rejects and every
-// call site that awaits api() would abort mid-flow.
-const ct=r.headers.get('content-type')||'';
-if(r.status===204||!ct.includes('json')) return null;
+// The Clash API returns 204 No Content for PUT/DELETE (empty body, .json()
+// would reject). Only skip parsing for those — don't check content-type,
+// because sing-box sends "text/plain" even for JSON bodies.
+if(r.status===204) return null;
 return r.json();
 }
 
