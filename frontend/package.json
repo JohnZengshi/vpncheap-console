@@ -6,7 +6,10 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "format": "npx prettier --write \"src/**/*.{js,jsx,ts,tsx,css}\"",
+    "format:check": "npx prettier --check \"src/**/*.{js,jsx,ts,tsx,css}\""
   },
   "keywords": [],
   "author": "",
@@ -17,9 +20,12 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "code-inspector-plugin": "^2.0.8",
     "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
     "vite": "^8.2.2"
   }
 }
