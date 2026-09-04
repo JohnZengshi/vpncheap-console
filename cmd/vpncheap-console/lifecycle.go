@@ -152,9 +152,10 @@ func readPidfile(path string) int {
 func removePidfile(path string) { os.Remove(path) }
 
 // watchClash monitors the Clash API in the background. If it becomes
-// unreachable (VPNCheap crashed or the tunnel dropped), it re-runs the
-// autostart sequence to bring everything back up. This keeps the console
-// self-healing instead of spamming "clash api unreachable" forever.
+// unreachable AND VPNCheap.app is not running (crashed, not user-disconnect),
+// it re-runs the autostart sequence. It does NOT interfere when the user
+// manually disconnects the tunnel (VPNCheap still running, tunnel down =
+// user's choice).
 func watchClash(logger *slog.Logger, clashBase string) {
 	for {
 		time.Sleep(10 * time.Second)
@@ -164,7 +165,13 @@ func watchClash(logger *slog.Logger, clashBase string) {
 		if _, ph := getPhase(); ph == "launching" {
 			continue // autostart already running
 		}
-		logger.Warn("watchClash: clash api down, re-launching VPNCheap")
+		// Only auto-recover if VPNCheap itself is gone (crashed). If the app
+		// is still running but 9090 is down, the user likely disconnected
+		// intentionally — don't fight them by reconnecting.
+		if appRunning() {
+			continue
+		}
+		logger.Warn("watchClash: clash api down and VPNCheap not running, re-launching")
 		autostart(logger, clashBase)
 	}
 }
