@@ -38,6 +38,14 @@ tr:hover td{background:#161821}
 .tabs button.active{color:#e0e3e8;border-color:#2563eb}
 .err-row{color:#f87171;font-size:11px}
 input.search{padding:4px 8px;background:#1e2230;border:1px solid #2a2e3c;border-radius:6px;color:#c8ccd4;font-size:12px;width:180px}
+.node-id{font-size:10px;color:#6b7280;margin-top:1px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.health-bar{padding:4px 18px;font-size:12px;border-bottom:1px solid #1e2230;display:none;align-items:center;gap:8px}
+.health-bar.show{display:flex}
+.health-bar .ph{width:8px;height:8px;border-radius:50%}
+.health-bar.launching .ph{background:#eab308}
+.health-bar.ready .ph{display:none}
+.health-bar.degraded .ph{background:#ef4444}
+td b{font-weight:600}
 </style>
 </head>
 <body>
@@ -53,6 +61,7 @@ input.search{padding:4px 8px;background:#1e2230;border:1px solid #2a2e3c;border-
 <button class="btn danger" id="discBtn" onclick="confirmDisc()" title="disconnect tunnel">disconnect</button>
 </span>
 </div>
+<div class="health-bar" id="healthBar"><span class="ph"></span><span id="healthText"></span></div>
 <div class="traffic">
 <span>up <b id="up">0</b> B/s<span class="barwrap"><span class="bar" id="upBar"></span></span></span>
 <span>down <b id="down">0</b> B/s<span class="barwrap"><span class="bar" id="downBar"></span></span></span>
@@ -75,7 +84,7 @@ input.search{padding:4px 8px;background:#1e2230;border:1px solid #2a2e3c;border-
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
 let proxies={}, selector='', now='', modes=[], curMode='';
-let allNames=[], delayCache={}, testing={};
+let allNames=[], delayCache={}, testing={}, labelMap={};
 let maxUp=1, maxDown=1;
 let tab='nodes';
 
@@ -121,11 +130,21 @@ for(const[k,v]of Object.entries(proxies)){
 if(v.type==='Selector'||v.type==='URLTest'){selector=k;now=v.now||'';allNames=v.all||[];}
 }
 renderNodes();
+fetchLabels();
 }
+async function fetchLabels(){
+try{
+const r=await fetch('/labels');
+const d=await r.json();
+labelMap=d.mapping||{};
+}catch(e){}
+renderNodes();
+}
+function displayLabel(n){return labelMap[n]||n;}
 function renderNodes(){
 const q=(document.getElementById('search').value||'').toLowerCase();
 const body=document.getElementById('nodeBody');
-const names=allNames.filter(n=>n!=='direct'&&n.toLowerCase().includes(q));
+const names=allNames.filter(n=>n!=='direct'&&(n.toLowerCase().includes(q)||(labelMap[n]||'').toLowerCase().includes(q)));
 if(!names.length){body.innerHTML='<tr><td colspan="5" class="empty">no nodes</td></tr>';return;}
 body.innerHTML=names.map(n=>{
 const p=proxies[n]||{};
@@ -135,7 +154,7 @@ const latTxt=d?(d+'ms'):(testing[n]?'…':'-');
 const dc=testing[n]?'':latC(d);
 return '<tr>'
 +'<td>'+(isSel?'<span class="sel">●</span>':'')+'</td>'
-+'<td>'+n+'</td>'
++'<td title="'+n+'"><b>'+displayLabel(n)+'</b><div class="node-id">'+n+'</div></td>'
 +'<td class="tag">'+(p.type||'-')+'</td>'
 +'<td class="'+dc+'">'+latTxt+'</td>'
 +'<td><button class="icon-btn" onclick="selectNode(\''+n+'\')" title="select" '+(isSel?'disabled':'')+'>use</button> '
@@ -171,7 +190,7 @@ const d=await r.json();
 for(const res of d.results||[])delayCache[res.name]=res.delay||0;
 if(d.best)now=d.best.name;
 renderNodes();
-btn.textContent=d.best?'best: '+d.best.name+' ('+d.best.delay+'ms)':'best: all failed';
+btn.textContent=d.best?'best: '+displayLabel(d.best.name)+' ('+d.best.delay+'ms)':'best: all failed';
 }catch(e){btn.textContent='best: error';}
 finally{btn.disabled=false;setTimeout(()=>{btn.textContent='best';},3000);}
 }
@@ -231,6 +250,14 @@ return pump();
 return pump();
 }).catch(()=>{});
 }
+async function pollHealth(){
+try{
+const r=await fetch('/health');const d=await r.json();const b=document.getElementById('healthBar');
+b.className='health-bar show '+d.phase;
+document.getElementById('healthText').textContent=d.phase+': '+d.detail;
+if(d.phase==='ready')b.className='health-bar ready';
+}catch(e){}
+}
 async function pollTunnel(){
 try{const r=await fetch('/tunnel?action=status');renderTunnel(await r.json());}catch(e){}
 }
@@ -244,8 +271,8 @@ if(confirm('Disconnect the VPNCheap tunnel?'))tunnel('disconnect');
 async function poll(){
 try{await Promise.all([loadConfigs(),loadProxies()]);}catch(e){}
 }
-poll();pollConns();pollTunnel();startTraffic();
-setInterval(poll,5000);setInterval(pollConns,3000);setInterval(pollTunnel,5000);
+pollHealth();poll();pollConns();pollTunnel();startTraffic();
+setInterval(pollHealth,2000);setInterval(poll,5000);setInterval(pollConns,3000);setInterval(pollTunnel,5000);
 </script>
 </body>
 </html>

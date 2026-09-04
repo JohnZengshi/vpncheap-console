@@ -18,15 +18,28 @@ Or:
 
 ```bash
 make run          # build + run, same defaults
+make stop         # full shutdown: disconnect tunnel, quit VPNCheap, stop console
 ./run.sh          # build + run, with VPNCheap/Clash API preflight checks
 ```
 
 `make test` runs `go vet` and `go test`.
 
+By default the console **auto-starts VPNCheap**: if the Clash API at `-clash`
+is not reachable it opens `VPNCheap.app`, connects the tunnel, and polls the
+API for up to 30s. The UI shows this progress via `/health`. Disable with
+`-autostart=false`.
+
 ## Flags
 
 - `-addr` - listen address. Defaults to `127.0.0.1:18090`. Must be loopback.
 - `-clash` - local Clash API base URL. Defaults to `http://127.0.0.1:9090`.
+- `-autostart` - launch VPNCheap + connect tunnel if the Clash API is down.
+  Defaults to `true`.
+- `-pidfile` - pidfile path used by `make stop`. Defaults to
+  `~/.vpncheap-console.pid`.
+- `-labels` - comma-separated sing-box config paths whose outbound tags become
+  human-readable node labels. Defaults to auto-detected paths (easy_proxies
+  and the SFM sing-box app).
 
 ## Endpoints
 
@@ -48,9 +61,14 @@ Console-added, not proxied to Clash:
   switch to whichever comes back with the lowest delay. Returns
   `{"results":[{"name","delay"}...],"best":{"name","delay"}}`, or
   `{"results":[...],"error":"..."}` if every node failed.
+- `GET /labels` - maps each `xboard_*` proxy name to a human-readable label by
+  pairing the Clash API's proxy order with a sing-box config's outbound tags.
+  `{"mapping":{"xboard_96b35930...":"HK-香港1-官网Vpncheap.io",...}}`. Empty
+  mapping when the source config is missing or lengths disagree.
 
 Console-only:
 
+- `GET /health` - launch phase: `{"phase":"launching|ready|degraded","detail":"..."}`.
 - `GET /tunnel?action=status|connect|disconnect` - read/control the macOS VPN
   tunnel via `scutil`. The service name is resolved from `scutil --nc list` by
   matching the bundle id `com.vpncheap.macnative`; it is never taken from
