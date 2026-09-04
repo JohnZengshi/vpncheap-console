@@ -8,6 +8,7 @@ ADDR_PORT := $(lastword $(subst :, ,$(ADDR)))
 .PHONY: build run stop test vet clean
 
 build:
+	npm --prefix frontend run build
 	go build -o $(BIN) ./cmd/vpncheap-console
 
 run: build

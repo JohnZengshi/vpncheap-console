@@ -4,3 +4,5 @@ config.yaml
 .omo/
 .codegraph/
 .scratch/
+/frontend/node_modules/
+/cmd/vpncheap-console/web/assets/
