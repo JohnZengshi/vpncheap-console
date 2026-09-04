@@ -60,7 +60,10 @@ func autostart(logger *slog.Logger, clashBase string) {
 	}
 	setPhase("launching", "starting VPNCheap.app")
 	if !appRunning() {
-		if err := exec.Command("open", "-a", appBundleName).Run(); err != nil {
+		// -j: launch hidden, -g: do not bring the app to the foreground. The
+		// console drives VPNCheap headless; its window/menu-bar UI must not
+		// pop up over the user's work.
+		if err := exec.Command("open", "-gj", "-a", appBundleName).Run(); err != nil {
 			logger.Warn("autostart: open app failed", "err", err)
 			setPhase("degraded", "open VPNCheap failed: "+err.Error())
 			return
