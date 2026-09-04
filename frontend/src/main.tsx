@@ -404,7 +404,7 @@ function App() {
   };
   useEffect(() => {
     load();
-    const timer = setInterval(load, 5000);
+    const timer = setInterval(load, 2000);
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
@@ -449,6 +449,27 @@ function App() {
     poll();
     const timer = setInterval(poll, 2000);
     return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () =>
+      fetch("/exit")
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled) return;
+          setExit(
+            d.error
+              ? `exit: ${d.error}`
+              : `exit: ${d.ip} ${d.city || ""} ${d.country ? `(${d.country})` : ""}`,
+          );
+        })
+        .catch(() => !cancelled && setExit("exit: error"));
+    poll();
+    const timer = setInterval(poll, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, []);
   useEffect(() => {
     let cancelled = false,
@@ -517,6 +538,7 @@ function App() {
       });
       setCurrent(name);
       await api("/connections", { method: "DELETE" });
+      await checkExit();
     } catch {
     } finally {
       setBusy((old) => ({ ...old, [name]: false }));
@@ -530,7 +552,10 @@ function App() {
     (d.results || []).forEach((r) =>
       setDelays((old) => ({ ...old, [r.name]: r.delay || 0 })),
     );
-    if (d.best) setCurrent(d.best.name);
+    if (d.best) {
+      setCurrent(d.best.name);
+      await checkExit();
+    }
   };
   const checkExit = () =>
     fetch("/exit")
