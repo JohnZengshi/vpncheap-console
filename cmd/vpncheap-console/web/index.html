@@ -45,6 +45,7 @@ input.search{padding:4px 8px;background:#1e2230;border:1px solid #2a2e3c;border-
 <h1>VPNCheap</h1>
 <span class="mode" id="modeCtrl"></span>
 <button class="btn" id="testAll" onclick="testAll()">test all</button>
+<button class="btn" id="bestBtn" onclick="pickBest()">best</button>
 <input class="search" id="search" placeholder="filter nodes" oninput="renderNodes()">
 <span class="tunnel">
 <span class="dot off" id="tunnelDot"></span><span id="tunnelState" style="font-size:12px;color:#7a8190">…</span>
@@ -160,6 +161,19 @@ const names=allNames.filter(n=>n!=='direct');
 const CONC=8;let i=0;
 const run=async()=>{while(i<names.length){const n=names[i++];await testOne(n);}};
 await Promise.all(Array.from({length:CONC},run));
+}
+async function pickBest(){
+const btn=document.getElementById('bestBtn');
+btn.disabled=true;btn.textContent='testing...';
+try{
+const r=await fetch('/best',{method:'POST'});
+const d=await r.json();
+for(const res of d.results||[])delayCache[res.name]=res.delay||0;
+if(d.best)now=d.best.name;
+renderNodes();
+btn.textContent=d.best?'best: '+d.best.name+' ('+d.best.delay+'ms)':'best: all failed';
+}catch(e){btn.textContent='best: error';}
+finally{btn.disabled=false;setTimeout(()=>{btn.textContent='best';},3000);}
 }
 function setTab(t){
 tab=t;

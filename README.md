@@ -14,6 +14,15 @@ go build -o vpncheap-console ./cmd/vpncheap-console
 
 Then open `http://127.0.0.1:18090/`.
 
+Or:
+
+```bash
+make run          # build + run, same defaults
+./run.sh          # build + run, with VPNCheap/Clash API preflight checks
+```
+
+`make test` runs `go vet` and `go test`.
+
 ## Flags
 
 - `-addr` - listen address. Defaults to `127.0.0.1:18090`. Must be loopback.
@@ -32,6 +41,13 @@ All `/api/*` requests are reverse-proxied to the local Clash API:
 - `GET /api/traffic` - streaming line-delimited JSON of up/down bytes.
 - `GET /api/connections` - active connections.
 - `DELETE /api/connections/{id}` - close one connection.
+
+Console-added, not proxied to Clash:
+
+- `POST /best` - probe every node in the `proxy` selector concurrently and
+  switch to whichever comes back with the lowest delay. Returns
+  `{"results":[{"name","delay"}...],"best":{"name","delay"}}`, or
+  `{"results":[...],"error":"..."}` if every node failed.
 
 Console-only:
 

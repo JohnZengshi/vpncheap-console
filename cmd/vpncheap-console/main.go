@@ -46,6 +46,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", proxy))
 	mux.Handle("/tunnel", tunnelHandler(logger))
+	mux.Handle("/best", bestHandler(logger, *clash))
 
 	webRoot, err := fs.Sub(webFiles, "web")
 	if err != nil {
