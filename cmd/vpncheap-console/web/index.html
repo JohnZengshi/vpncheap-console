@@ -93,6 +93,11 @@ let tab='nodes';
 async function api(path, opts){
 const r=await fetch('/api'+path, opts);
 if(!r.ok) throw new Error(r.status+' '+await r.text());
+// PUT/DELETE to the Clash API return 204 No Content (empty body). Only try
+// to parse JSON when there is a body, otherwise .json() rejects and every
+// call site that awaits api() would abort mid-flow.
+const ct=r.headers.get('content-type')||'';
+if(r.status===204||!ct.includes('json')) return null;
 return r.json();
 }
 
