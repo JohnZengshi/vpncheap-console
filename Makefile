@@ -5,17 +5,13 @@ CLASH ?= http://127.0.0.1:9090
 # Extract just the port number for lsof checks.
 ADDR_PORT := $(lastword $(subst :, ,$(ADDR)))
 
-.PHONY: build run backend frontend-dev stop test vet clean
+.PHONY: build run frontend-dev stop test vet clean
 
 build:
 	npm --prefix frontend run build
 	go build -o $(BIN) ./cmd/vpncheap-console
 
 run: build
-	./$(BIN) -addr $(ADDR) -clash $(CLASH)
-
-backend:
-	go build -o $(BIN) ./cmd/vpncheap-console
 	./$(BIN) -addr $(ADDR) -clash $(CLASH)
 
 frontend-dev:
