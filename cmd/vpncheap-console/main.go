@@ -90,6 +90,7 @@ func main() {
 	// report phase via /health while we wait for the Clash API.
 	if *autostartFlag {
 		go autostart(logger, *clash)
+		go watchClash(logger, *clash)
 	} else {
 		setPhase("ready", "autostart disabled")
 	}
