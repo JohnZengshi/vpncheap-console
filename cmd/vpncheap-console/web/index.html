@@ -72,6 +72,7 @@ td b{font-weight:600}
 <div class="tabs">
 <button class="active" id="tabNodes" onclick="setTab('nodes')">Nodes</button>
 <button id="tabConns" onclick="setTab('conns')">Connections</button>
+<button id="tabProxy" disabled title="Proxy disabled">Proxy</button>
 </div>
 <div id="nodesView">
 <table><thead><tr>
@@ -82,6 +83,39 @@ td b{font-weight:600}
 <table class="conns"><thead><tr>
 <th>ID</th><th>Network</th><th>Source</th><th>Destination</th><th>Outbound</th><th>Up</th><th>Down</th><th></th>
 </tr></thead><tbody id="connBody"></tbody></table>
+</div>
+<div id="proxyView" style="display:none;padding:12px 18px">
+<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
+<span class="dot off" id="proxyDot"></span>
+<span style="font-size:12px;color:#7a8190" id="proxyStatus">loading…</span>
+</div>
+<div style="margin-bottom:14px">
+<label style="font-size:11px;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px">Fallback node</label>
+<select id="proxyFallback" style="padding:4px 8px;background:#1e2230;border:1px solid #2a2e3c;border-radius:6px;color:#c8ccd4;font-size:12px;min-width:200px"></select>
+</div>
+<div style="margin-bottom:14px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<label style="font-size:11px;color:#6b7280;text-transform:uppercase">Domain routing rules</label>
+<button class="btn" onclick="addRuleRow()" style="font-size:11px;padding:3px 8px">+ add rule</button>
+<button class="btn" onclick="saveRules()" style="font-size:11px;padding:3px 8px">save</button>
+<button class="btn" onclick="exportRules()" style="font-size:11px;padding:3px 8px" title="export for 9router">export</button>
+</div>
+<table id="proxyRulesTable" style="width:100%"><thead><tr>
+<th style="width:50%">Domain (suffix match)</th><th style="width:40%">Node</th><th style="width:10%"></th>
+</tr></thead><tbody id="proxyRulesBody"></tbody></table>
+<div id="proxySaveMsg" style="font-size:11px;margin-top:6px;display:none"></div>
+</div>
+<div style="margin-bottom:14px;border-top:1px solid #1e2230;padding-top:14px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<label style="font-size:11px;color:#6b7280;text-transform:uppercase">Multi-port (9router)</label>
+<button class="btn" onclick="loadMultiport()" style="font-size:11px;padding:3px 8px">refresh</button>
+<button class="btn" onclick="exportMultiport()" style="font-size:11px;padding:3px 8px">export 9router</button>
+</div>
+<div id="multiportStatus" style="font-size:12px;color:#7a8190;margin-bottom:8px">click refresh to load</div>
+<table id="multiportTable" style="width:100%;display:none"><thead><tr>
+<th style="width:50%">Node</th><th style="width:50%">Proxy URL</th>
+</tr></thead><tbody id="multiportBody"></tbody></table>
+</div>
 </div>
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
@@ -224,11 +258,14 @@ out.textContent='exit: '+d.ip+' · '+(d.city||'')+(d.country?' ('+d.country+')':
 finally{btn.disabled=false;btn.textContent='exit ip';}
 }
 function setTab(t){
+if(t==='proxy')return;
 tab=t;
 document.getElementById('tabNodes').className=t==='nodes'?'active':'';
 document.getElementById('tabConns').className=t==='conns'?'active':'';
+document.getElementById('tabProxy').className=t==='proxy'?'active':'';
 document.getElementById('nodesView').style.display=t==='nodes'?'':'none';
 document.getElementById('connsView').style.display=t==='conns'?'':'none';
+document.getElementById('proxyView').style.display=t==='proxy'?'':'none';
 }
 function renderConns(d){
 const body=document.getElementById('connBody');
@@ -300,7 +337,136 @@ if(confirm('Disconnect the VPNCheap tunnel?'))tunnel('disconnect');
 async function poll(){
 try{await Promise.all([loadConfigs(),loadProxies()]);}catch(e){}
 }
-pollHealth();poll();pollConns();pollTunnel();startTraffic();
+loadProxy();
+// ---- Proxy router UI ----
+async function proxyApi(path, opts){
+  const r=await fetch(path, opts);
+  if(!r.ok) throw new Error(r.status+' '+await r.text());
+  if(r.status===204) return null;
+  return r.json();
+}
+async function loadProxy(){
+  try{
+    const [status, rules]=await Promise.all([
+      proxyApi('/proxy/status'),
+      proxyApi('/proxy/rules')
+    ]);
+    // status
+    const dot=document.getElementById('proxyDot');
+    dot.className=status.running?'dot on':'dot off';
+    document.getElementById('proxyStatus').textContent=
+      status.running?('running on '+status.addr):'not running';
+    // rules table
+    renderProxyRules(rules, allNames);
+  }catch(e){
+    document.getElementById('proxyStatus').textContent='proxy not available';
+    document.getElementById('proxyDot').className='dot off';
+  }
+}
+function renderProxyRules(rules, nodes){
+  const body=document.getElementById('proxyRulesBody');
+  // populate fallback dropdown
+  const sel=document.getElementById('proxyFallback');
+  sel.innerHTML='<option value="">(none)</option>'+
+    nodes.map(n=>'<option value="'+n+'"'+(n===rules.fallback?' selected':'')+'>'+displayLabel(n)+'</option>').join('');
+  // rules rows
+  const r=rules.rules||[];
+  if(!r.length){
+    body.innerHTML='<tr><td colspan="3" class="empty">no rules — all traffic uses fallback</td></tr>';
+    return;
+  }
+  body.innerHTML=r.map((rule,i)=>{
+    return '<tr>'
+      +'<td><input class="search" style="width:100%" value="'+(rule.domain||'')+'" data-ridx="'+i+'" data-field="domain" placeholder="example.com"></td>'
+      +'<td><select style="padding:4px 8px;background:#1e2230;border:1px solid #2a2e3c;border-radius:6px;color:#c8ccd4;font-size:12px;width:100%" data-ridx="'+i+'" data-field="node">'
+      +'<option value="">(select)</option>'
+      +nodes.map(n=>'<option value="'+n+'"'+(n===rule.node?' selected':'')+'>'+displayLabel(n)+'</option>').join('')
+      +'</select></td>'
+      +'<td><button class="icon-btn" onclick="delRuleRow('+i+')" title="delete">✕</button></td>'
+      +'</tr>';
+  }).join('');
+}
+function addRuleRow(){
+  const body=document.getElementById('proxyRulesBody');
+  if(body.querySelector('.empty'))body.innerHTML='';
+  const i=body.children.length;
+  const nodes=allNames;
+  body.insertAdjacentHTML('beforeend',
+    '<tr>'
+    +'<td><input class="search" style="width:100%" value="" data-ridx="'+i+'" data-field="domain" placeholder="example.com"></td>'
+    +'<td><select style="padding:4px 8px;background:#1e2230;border:1px solid #2a2e3c;border-radius:6px;color:#c8ccd4;font-size:12px;width:100%" data-ridx="'+i+'" data-field="node">'
+    +'<option value="">(select)</option>'
+    +nodes.map(n=>'<option value="'+n+'">'+displayLabel(n)+'</option>').join('')
+    +'</select></td>'
+    +'<td><button class="icon-btn" onclick="delRuleRow('+i+')" title="delete">✕</button></td>'
+    +'</tr>'
+  );
+}
+function delRuleRow(i){
+  const body=document.getElementById('proxyRulesBody');
+  const row=body.querySelector('tr:nth-child('+(i+1)+')');
+  if(row)row.remove();
+  // reindex
+  Array.from(body.querySelectorAll('tr')).forEach((tr,idx)=>{
+    tr.querySelectorAll('[data-ridx]').forEach(el=>el.dataset.ridx=idx);
+    const btn=tr.querySelector('button[onclick^="delRuleRow"]');
+    if(btn)btn.setAttribute('onclick','delRuleRow('+idx+')');
+  });
+}
+async function exportRules(){
+  window.open('/proxy/export?target=9router','_blank');
+}
+async function saveRules(){
+  const body=document.getElementById('proxyRulesBody');
+  const rows=Array.from(body.querySelectorAll('tr')).map(tr=>{
+    const domain=tr.querySelector('[data-field="domain"]')?.value||'';
+    const node=tr.querySelector('[data-field="node"]')?.value||'';
+    return {domain,node};
+  }).filter(r=>r.domain&&r.node);
+  const fallback=document.getElementById('proxyFallback').value;
+  const msg=document.getElementById('proxySaveMsg');
+  msg.style.display='block';
+  msg.textContent='saving…';
+  msg.style.color='#eab308';
+  try{
+    await proxyApi('/proxy/rules',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fallback,rules:rows})
+    });
+    msg.textContent='saved ✓';
+    msg.style.color='#22c55e';
+    setTimeout(()=>msg.style.display='none',3000);
+  }catch(e){
+    msg.textContent='error: '+e.message;
+    msg.style.color='#ef4444';
+  }
+}
+
+// ---- Multi-port (9router) ----
+async function loadMultiport(){
+  try{
+    const d=await (await fetch('/multiport/status')).json();
+    const st=document.getElementById('multiportStatus');
+    if(d.running){
+      st.textContent=d.ports+' ports active, last node: '+(d.last_node||'none');
+      const body=document.getElementById('multiportBody');
+      const list=d.list||[];
+      body.innerHTML=list.map(p=>'<tr><td>'+displayLabel(p.tag)+'</td><td><code style="font-size:11px;color:#7a8190">http://127.0.0.1:'+p.port+'</code></td></tr>').join('');
+      document.getElementById('multiportTable').style.display='';
+    } else {
+      st.textContent='multi-port not running (start with -multiport flag)';
+      document.getElementById('multiportTable').style.display='none';
+    }
+  }catch(e){
+    document.getElementById('multiportStatus').textContent='multi-port not available';
+    document.getElementById('multiportTable').style.display='none';
+  }
+}
+function exportMultiport(){
+  window.open('/multiport/export','_blank');
+}
+loadProxy();pollHealth();poll();pollConns();pollTunnel();startTraffic();
 setInterval(pollHealth,2000);setInterval(poll,5000);setInterval(pollConns,3000);setInterval(pollTunnel,5000);
 </script>
 </body>

@@ -54,11 +54,13 @@ func main() {
 		os.Exit(1)
 	}
 
+
 	if err := writePidfile(*pidfilePath); err != nil {
 		logger.Warn("write pidfile failed", "err", err)
 	}
 	defer removePidfile(*pidfilePath)
 
+var mpMgrRef *multiPortManager
 	proxy := httputil.NewSingleHostReverseProxy(clashURL)
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		logger.Warn("clash api unreachable", "path", r.URL.Path, "err", err)
@@ -73,6 +75,7 @@ func main() {
 	mux.Handle("/labels", labelsHandler(logger, *clash))
 	mux.Handle("/exit", exitHandler(logger))
 
+
 	webRoot, err := fs.Sub(webFiles, "web")
 	if err != nil {
 		logger.Error("embed sub failed", "err", err)
@@ -85,6 +88,44 @@ func main() {
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	// Domain-based proxy router + multi-port: always on, no flags needed.
+	proxyAddr := "127.0.0.1:2323"
+	multiPortBase := 24000
+	// Load rules from rules.json if it exists.
+	pcfg, _ := loadProxyRules("rules.json")
+	pcfg.clashBase = *clash
+	pcfg.logger = logger
+	pcfg.dropConnections = true
+	if len(pcfg.rules) > 0 {
+		logger.Info("proxy rules loaded", "count", len(pcfg.rules), "fallback", pcfg.fallback)
+	}
+	if err := validateProxyRules(pcfg); err != nil {
+		logger.Warn("proxy: rule validation skipped (Clash API may not be ready yet)", "err", err)
+	}
+	proxyMgr := newProxyManager(pcfg, true, proxyAddr)
+	mux.Handle("/proxy/rules", http.HandlerFunc(proxyMgr.rulesHandler))
+	mux.Handle("/proxy/status", http.HandlerFunc(proxyMgr.statusHandler))
+	mux.Handle("/proxy/export", http.HandlerFunc(proxyMgr.exportHandler))
+	proxySrv := &http.Server{
+		Addr:              proxyAddr,
+		Handler:           proxyMgr.newProxyHandlerFromManager(),
+		ReadHeaderTimeout: 15 * time.Second,
+	}
+	go func() {
+		logger.Info("proxy router starting", "addr", proxyAddr, "clash", *clash)
+		if err := proxySrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("proxy server error", "err", err)
+		}
+	}()
+	// Multi-port: one port per node for 9router, always on.
+	mpMgrRef = newMultiPortManager(*clash, logger)
+	if err := mpMgrRef.Start(multiPortBase); err != nil {
+		logger.Warn("multiport: failed to start", "err", err)
+	}
+	mux.HandleFunc("/multiport/export", mpMgrRef.export9router)
+	mux.HandleFunc("/multiport/status", mpMgrRef.statusJSON)
+	// Multiport waits for Clash API async, so routes work even before nodes load.
 
 	// Start HTTP immediately and run autostart in the background so the UI can
 	// report phase via /health while we wait for the Clash API.
@@ -111,5 +152,6 @@ func main() {
 	shutdownVPN(logger)
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutCancel()
+	proxySrv.Shutdown(shutCtx)
 	srv.Shutdown(shutCtx)
 }
