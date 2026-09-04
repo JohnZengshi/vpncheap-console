@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  IconBolt,
+  IconCheck,
+  IconGauge,
+  IconRefresh,
+  IconWorld,
+} from "@tabler/icons-react";
 import "./index.css";
 
 type ProxyInfo = {
@@ -91,14 +98,32 @@ function TopBar({
           </button>
         ))}
       </div>
-      <button className={button} onClick={onTestAll}>
-        test all
+      <button
+        className={button}
+        title="Test all nodes"
+        aria-label="Test all nodes"
+        onClick={onTestAll}
+      >
+        <IconRefresh size={14} stroke={1.8} aria-hidden="true" />
+        <span className="sr-only">test all</span>
       </button>
-      <button className={button} onClick={onBest}>
-        best
+      <button
+        className={button}
+        title="Select best node"
+        aria-label="Select best node"
+        onClick={onBest}
+      >
+        <IconGauge size={14} stroke={1.8} aria-hidden="true" />
+        <span className="sr-only">best</span>
       </button>
-      <button className={button} onClick={onExit}>
-        exit ip
+      <button
+        className={button}
+        title="Check exit IP"
+        aria-label="Check exit IP"
+        onClick={onExit}
+      >
+        <IconWorld size={14} stroke={1.8} aria-hidden="true" />
+        <span className="sr-only">exit ip</span>
       </button>
       <input
         className={`${input} w-44`}
@@ -232,16 +257,22 @@ function NodeTable({
                 <button
                   className={iconButton}
                   disabled={selected || pending}
+                  title={`Use ${name.name}`}
+                  aria-label={`Use ${name.name}`}
                   onClick={() => onSelect(name.name)}
                 >
-                  use
+                  <IconCheck size={14} stroke={1.8} aria-hidden="true" />
+                  <span className="sr-only">use</span>
                 </button>{" "}
                 <button
                   className={iconButton}
                   disabled={pending}
+                  title={`Test ${name.name}`}
+                  aria-label={`Test ${name.name}`}
                   onClick={() => onTest(name.name)}
                 >
-                  test
+                  <IconBolt size={14} stroke={1.8} aria-hidden="true" />
+                  <span className="sr-only">test</span>
                 </button>
               </td>
             </tr>
