@@ -73,12 +73,15 @@ Console-added, not proxied to Clash:
 Console-only:
 
 - `GET /health` - launch phase: `{"phase":"launching|ready|degraded","detail":"..."}`.
-- `GET /tunnel?action=status|connect|disconnect|reconnect` - read/control the
-  macOS VPN tunnel via `scutil`. `reconnect` (stop then start) is used after
-  switching the active node so the new selection takes effect on live traffic.
-  The service name is resolved from `scutil --nc list` by matching the bundle
-  id `com.vpncheap.macnative`; it is never taken from request input.
-  `disconnect` should be confirmed in the UI before firing.
+- `GET /tunnel?action=status|connect|disconnect` - read/control the macOS VPN
+  tunnel via `scutil`. The service name is resolved from `scutil --nc list` by
+  matching the bundle id `com.vpncheap.macnative`; it is never taken from
+  request input. `disconnect` should be confirmed in the UI before firing.
+- Switching nodes (`use`) does **not** bounce the tunnel: it PUTs the selector
+  then DELETEs `/api/connections`, dropping live keep-alive connections so
+  they rebuild through the new node. Bouncing the tunnel via scutil was tried
+  and abandoned - macOS NetworkExtension refuses a rapid stop/start, which
+  dropped the VPN entirely.
 
 ## Security
 

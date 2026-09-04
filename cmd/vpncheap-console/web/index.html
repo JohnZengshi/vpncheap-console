@@ -166,16 +166,15 @@ return '<tr>'
 if(window.lucide)lucide.createIcons();
 }
 async function selectNode(n){
-const btn=document.getElementById('tunnelState');
+// 1. switch the selector
 await api('/proxies/'+encodeURIComponent(selector),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});
 now=n;renderNodes();
-// The kernel only rebuilds routing on a fresh tunnel, so reconnect so the
-// switch takes effect on live traffic (mirrors manual disconnect+connect).
-btn.textContent='switching...';
-try{
-await fetch('/tunnel?action=reconnect',{method:'POST'});
-}catch(e){}
-setTimeout(pollTunnel,2000);
+// 2. drop live connections so they rebuild through the new node. The kernel
+// only routes *new* connections through the just-selected node; established
+// keep-alive connections keep their old egress. Clearing them (not bouncing
+// the tunnel) makes the switch take effect immediately without dropping the
+// VPN. Best-effort: ignore errors so a failed clear still shows the new now.
+try{await api('/connections',{method:'DELETE'});}catch(e){}
 }
 async function testOne(n){
 testing[n]=true;renderNodes();
