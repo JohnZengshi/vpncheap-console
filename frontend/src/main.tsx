@@ -429,13 +429,11 @@ function App() {
   });
   const names = useMemo(
     () =>
-      Object.entries(proxies)
-        .flatMap(([key, value]) =>
-          (value.all || []).map((name) => ({
-            name,
-            type: proxies[name]?.type || value.type,
-          })),
-        )
+      (proxies[selector]?.all || [])
+        .map((name) => ({
+          name,
+          type: proxies[name]?.type || "unknown",
+        }))
         .filter(
           (item, index, list) =>
             item.name !== "direct" &&
@@ -446,7 +444,7 @@ function App() {
             .toLowerCase()
             .includes(search.toLowerCase()),
         ),
-    [proxies, labels, search],
+    [proxies, selector, labels, search],
   );
   const load = async () => {
     try {

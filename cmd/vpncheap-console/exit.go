@@ -14,6 +14,17 @@ import (
 // It is a variable so tests can point it at a local server.
 var exitProbeURL = "https://ipinfo.io/json"
 
+// exitProbeClient must not keep connections alive. exitHandler is polled
+// every few seconds, and once the proxy selector switches node, a pooled
+// keep-alive connection to exitProbeURL keeps routing through the *old*
+// node's tunnel session until it naturally expires. That made the reported
+// exit IP lag one node switch behind, which looked like nodes reporting the
+// wrong country/city. Disabling keep-alives forces a fresh connection (and
+// therefore fresh routing through the current selector) on every check.
+var exitProbeClient = &http.Client{
+	Transport: &http.Transport{DisableKeepAlives: true},
+}
+
 type exitInfo struct {
 	IP      string `json:"ip"`
 	City    string `json:"city"`
@@ -42,7 +53,7 @@ func exitHandler(logger *slog.Logger) http.Handler {
 			return
 		}
 		req.Header.Set("User-Agent", "curl/8.0") // ipinfo returns plain JSON for curl UA
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := exitProbeClient.Do(req)
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]any{
 				"tunnel": map[string]string{"name": name, "state": state},
