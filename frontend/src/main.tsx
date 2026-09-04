@@ -4,6 +4,7 @@ import {
   IconBolt,
   IconCheck,
   IconGauge,
+  IconLoader2,
   IconRefresh,
   IconWorld,
 } from "@tabler/icons-react";
@@ -70,6 +71,7 @@ function TopBar({
   onTestAll,
   onBest,
   onExit,
+  loading,
   tunnel,
   onTunnel,
 }: {
@@ -81,6 +83,11 @@ function TopBar({
   onTestAll: () => void;
   onBest: () => void;
   onExit: () => void;
+  loading: {
+    testAll: boolean;
+    best: boolean;
+    exit: boolean;
+  };
   tunnel: Tunnel;
   onTunnel: (action: string) => void;
 }) {
@@ -100,29 +107,59 @@ function TopBar({
       </div>
       <button
         className={button}
+        disabled={loading.testAll}
         title="Test all nodes"
         aria-label="Test all nodes"
         onClick={onTestAll}
       >
-        <IconRefresh size={14} stroke={1.8} aria-hidden="true" />
+        {loading.testAll ? (
+          <IconLoader2
+            size={14}
+            stroke={1.8}
+            className="animate-spin"
+            aria-hidden="true"
+          />
+        ) : (
+          <IconRefresh size={14} stroke={1.8} aria-hidden="true" />
+        )}
         <span className="sr-only">test all</span>
       </button>
       <button
         className={button}
+        disabled={loading.best}
         title="Select best node"
         aria-label="Select best node"
         onClick={onBest}
       >
-        <IconGauge size={14} stroke={1.8} aria-hidden="true" />
+        {loading.best ? (
+          <IconLoader2
+            size={14}
+            stroke={1.8}
+            className="animate-spin"
+            aria-hidden="true"
+          />
+        ) : (
+          <IconGauge size={14} stroke={1.8} aria-hidden="true" />
+        )}
         <span className="sr-only">best</span>
       </button>
       <button
         className={button}
+        disabled={loading.exit}
         title="Check exit IP"
         aria-label="Check exit IP"
         onClick={onExit}
       >
-        <IconWorld size={14} stroke={1.8} aria-hidden="true" />
+        {loading.exit ? (
+          <IconLoader2
+            size={14}
+            stroke={1.8}
+            className="animate-spin"
+            aria-hidden="true"
+          />
+        ) : (
+          <IconWorld size={14} stroke={1.8} aria-hidden="true" />
+        )}
         <span className="sr-only">exit ip</span>
       </button>
       <input
@@ -198,7 +235,8 @@ function NodeTable({
   labels,
   current,
   delays,
-  busy,
+  selecting,
+  testing,
   onSelect,
   onTest,
 }: {
@@ -206,7 +244,8 @@ function NodeTable({
   labels: StringMap;
   current: string;
   delays: NumberMap;
-  busy: BooleanMap;
+  selecting: BooleanMap;
+  testing: BooleanMap;
   onSelect: (name: string) => void;
   onTest: (name: string) => void;
 }) {
@@ -227,7 +266,9 @@ function NodeTable({
         {nodes.map((name) => {
           const delay = delays[name.name],
             selected = name.name === current,
-            pending = busy[name.name];
+            selectingNode = selecting[name.name],
+            testingNode = testing[name.name],
+            pending = selectingNode || testingNode;
           return (
             <tr
               key={name.name}
@@ -261,7 +302,16 @@ function NodeTable({
                   aria-label={`Use ${name.name}`}
                   onClick={() => onSelect(name.name)}
                 >
-                  <IconCheck size={14} stroke={1.8} aria-hidden="true" />
+                  {selectingNode ? (
+                    <IconLoader2
+                      size={14}
+                      stroke={1.8}
+                      className="animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <IconCheck size={14} stroke={1.8} aria-hidden="true" />
+                  )}
                   <span className="sr-only">use</span>
                 </button>{" "}
                 <button
@@ -271,7 +321,16 @@ function NodeTable({
                   aria-label={`Test ${name.name}`}
                   onClick={() => onTest(name.name)}
                 >
-                  <IconBolt size={14} stroke={1.8} aria-hidden="true" />
+                  {testingNode ? (
+                    <IconLoader2
+                      size={14}
+                      stroke={1.8}
+                      className="animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <IconBolt size={14} stroke={1.8} aria-hidden="true" />
+                  )}
                   <span className="sr-only">test</span>
                 </button>
               </td>
@@ -349,13 +408,19 @@ function App() {
     [current, setCurrent] = useState(""),
     [labels, setLabels] = useState<StringMap>({});
   const [delays, setDelays] = useState<NumberMap>({}),
-    [busy, setBusy] = useState<BooleanMap>({}),
+    [selecting, setSelecting] = useState<BooleanMap>({}),
+    [testing, setTesting] = useState<BooleanMap>({}),
     [search, setSearch] = useState(""),
     [tab, setTab] = useState("nodes");
   const [connections, setConnections] = useState<Connection[]>([]),
     [tunnel, setTunnel] = useState<Tunnel>({}),
     [health, setHealth] = useState(null),
     [exit, setExit] = useState("");
+  const [loading, setLoading] = useState({
+    testAll: false,
+    best: false,
+    exit: false,
+  });
   const [traffic, setTraffic] = useState<Traffic>({
     up: 0,
     down: 0,
@@ -516,7 +581,7 @@ function App() {
     }).catch(() => {});
   };
   const testOne = async (name) => {
-    setBusy((old) => ({ ...old, [name]: true }));
+    setTesting((old) => ({ ...old, [name]: true }));
     try {
       const d = await api(
         `/proxies/${encodeURIComponent(name)}/delay?timeout=5000&url=http://www.gstatic.com/generate_204`,
@@ -525,11 +590,11 @@ function App() {
     } catch {
       setDelays((old) => ({ ...old, [name]: 0 }));
     } finally {
-      setBusy((old) => ({ ...old, [name]: false }));
+      setTesting((old) => ({ ...old, [name]: false }));
     }
   };
   const selectNode = async (name) => {
-    setBusy((old) => ({ ...old, [name]: true }));
+    setSelecting((old) => ({ ...old, [name]: true }));
     try {
       await api(`/proxies/${encodeURIComponent(selector)}`, {
         method: "PUT",
@@ -541,33 +606,49 @@ function App() {
       await checkExit();
     } catch {
     } finally {
-      setBusy((old) => ({ ...old, [name]: false }));
+      setSelecting((old) => ({ ...old, [name]: false }));
     }
   };
-  const testAll = () => Promise.all(names.map((item) => testOne(item.name)));
+  const testAll = async () => {
+    setLoading((old) => ({ ...old, testAll: true }));
+    try {
+      await Promise.all(names.map((item) => testOne(item.name)));
+    } finally {
+      setLoading((old) => ({ ...old, testAll: false }));
+    }
+  };
   const best = async () => {
-    const d = await fetch("/best", { method: "POST" })
-      .then((r) => r.json())
-      .catch(() => ({}));
-    (d.results || []).forEach((r) =>
-      setDelays((old) => ({ ...old, [r.name]: r.delay || 0 })),
-    );
-    if (d.best) {
-      setCurrent(d.best.name);
-      await checkExit();
+    setLoading((old) => ({ ...old, best: true }));
+    try {
+      const d = await fetch("/best", { method: "POST" })
+        .then((r) => r.json())
+        .catch(() => ({}));
+      (d.results || []).forEach((r) =>
+        setDelays((old) => ({ ...old, [r.name]: r.delay || 0 })),
+      );
+      if (d.best) {
+        setCurrent(d.best.name);
+        await checkExit();
+      }
+    } finally {
+      setLoading((old) => ({ ...old, best: false }));
     }
   };
-  const checkExit = () =>
-    fetch("/exit")
-      .then((r) => r.json())
-      .then((d) =>
-        setExit(
-          d.error
-            ? `exit: ${d.error}`
-            : `exit: ${d.ip} ${d.city || ""} ${d.country ? `(${d.country})` : ""}`,
-        ),
-      )
-      .catch(() => setExit("exit: error"));
+  const checkExit = async () => {
+    setLoading((old) => ({ ...old, exit: true }));
+    try {
+      const d = await fetch("/exit")
+        .then((r) => r.json())
+        .catch(() => ({ error: "error" }));
+      setExit(
+        d.error
+          ? `exit: ${d.error}`
+          : `exit: ${d.ip} ${d.city || ""} ${d.country ? `(${d.country})` : ""}`,
+      );
+    } finally {
+      setLoading((old) => ({ ...old, exit: false }));
+    }
+  };
   return (
     <main className="min-h-[100dvh]">
       <TopBar
@@ -575,6 +656,7 @@ function App() {
         onTestAll={testAll}
         onBest={best}
         onExit={checkExit}
+        loading={loading}
         tunnel={tunnel}
         onTunnel={(action) =>
           fetch(`/tunnel?action=${action}`, { method: "POST" }).then(() =>
@@ -625,7 +707,8 @@ function App() {
           labels={labels}
           current={current}
           delays={delays}
-          busy={busy}
+          selecting={selecting}
+          testing={testing}
           onSelect={selectNode}
           onTest={testOne}
         />
