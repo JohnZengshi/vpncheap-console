@@ -5,7 +5,7 @@ CLASH ?= http://127.0.0.1:9090
 # Extract just the port number for lsof checks.
 ADDR_PORT := $(lastword $(subst :, ,$(ADDR)))
 
-.PHONY: build run stop test vet clean
+.PHONY: build run backend frontend-dev stop test vet clean
 
 build:
 	npm --prefix frontend run build
@@ -13,6 +13,13 @@ build:
 
 run: build
 	./$(BIN) -addr $(ADDR) -clash $(CLASH)
+
+backend:
+	go build -o $(BIN) ./cmd/vpncheap-console
+	./$(BIN) -addr $(ADDR) -clash $(CLASH)
+
+frontend-dev:
+	npm --prefix frontend run dev
 
 # Per ADR-0002: full shutdown — disconnect tunnel, quit VPNCheap, stop console.
 # kill-by-pidfile alone is insufficient: launchd may auto-restart the process,
