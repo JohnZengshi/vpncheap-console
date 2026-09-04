@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 const vpnBundleID = "com.vpncheap.macnative"
@@ -42,6 +43,29 @@ func tunnelHandler(logger *slog.Logger) http.Handler {
 				return
 			}
 			json.NewEncoder(w).Encode(map[string]string{"name": name, "action": "disconnect"})
+		case "reconnect":
+			// Used after switching the active node via selectNode: the sing-box
+			// kernel only rebuilds its routing on a fresh tunnel, so a plain
+			// selector PUT does not take effect on live traffic. Reconnect =
+			// stop then start, which is exactly what the manual disconnect +
+			// connect dance does.
+			name := resolveServiceName(logger)
+			if name == "" {
+				http.Error(w, "vpn service not found", http.StatusNotFound)
+				return
+			}
+			if err := exec.Command("scutil", "--nc", "stop", name).Run(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			// Give the tunnel a moment to fully tear down before starting it
+			// again with the new node selection.
+			time.Sleep(500 * time.Millisecond)
+			if err := exec.Command("scutil", "--nc", "start", name).Run(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"name": name, "action": "reconnect"})
 		default:
 			http.Error(w, "unknown action", http.StatusBadRequest)
 		}

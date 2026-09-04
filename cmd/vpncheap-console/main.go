@@ -71,6 +71,7 @@ func main() {
 	mux.Handle("/best", bestHandler(logger, *clash))
 	mux.Handle("/health", healthHandler())
 	mux.Handle("/labels", labelsHandler(logger, *clash))
+	mux.Handle("/exit", exitHandler(logger))
 
 	webRoot, err := fs.Sub(webFiles, "web")
 	if err != nil {

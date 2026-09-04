@@ -65,14 +65,20 @@ Console-added, not proxied to Clash:
   pairing the Clash API's proxy order with a sing-box config's outbound tags.
   `{"mapping":{"xboard_96b35930...":"HK-香港1-官网Vpncheap.io",...}}`. Empty
   mapping when the source config is missing or lengths disagree.
+- `GET /exit` - probes where the current egress IP actually is (via
+  `https://ipinfo.io/json`, which exits through the tunnel when connected).
+  Lets you verify a node's real exit location instead of trusting its label.
+  `{"ip":"...","city":"...","country":"...","org":"...","tunnel":{"state":"..."}}`.
 
 Console-only:
 
 - `GET /health` - launch phase: `{"phase":"launching|ready|degraded","detail":"..."}`.
-- `GET /tunnel?action=status|connect|disconnect` - read/control the macOS VPN
-  tunnel via `scutil`. The service name is resolved from `scutil --nc list` by
-  matching the bundle id `com.vpncheap.macnative`; it is never taken from
-  request input. `disconnect` should be confirmed in the UI before firing.
+- `GET /tunnel?action=status|connect|disconnect|reconnect` - read/control the
+  macOS VPN tunnel via `scutil`. `reconnect` (stop then start) is used after
+  switching the active node so the new selection takes effect on live traffic.
+  The service name is resolved from `scutil --nc list` by matching the bundle
+  id `com.vpncheap.macnative`; it is never taken from request input.
+  `disconnect` should be confirmed in the UI before firing.
 
 ## Security
 

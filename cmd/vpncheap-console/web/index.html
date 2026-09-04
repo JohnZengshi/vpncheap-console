@@ -54,6 +54,7 @@ td b{font-weight:600}
 <span class="mode" id="modeCtrl"></span>
 <button class="btn" id="testAll" onclick="testAll()">test all</button>
 <button class="btn" id="bestBtn" onclick="pickBest()">best</button>
+<button class="btn" id="exitBtn" onclick="checkExit()">exit ip</button>
 <input class="search" id="search" placeholder="filter nodes" oninput="renderNodes()">
 <span class="tunnel">
 <span class="dot off" id="tunnelDot"></span><span id="tunnelState" style="font-size:12px;color:#7a8190">…</span>
@@ -66,6 +67,7 @@ td b{font-weight:600}
 <span>up <b id="up">0</b> B/s<span class="barwrap"><span class="bar" id="upBar"></span></span></span>
 <span>down <b id="down">0</b> B/s<span class="barwrap"><span class="bar" id="downBar"></span></span></span>
 <span style="color:#6b7280">active conns <b id="connCount" style="color:#c8ccd4">0</b></span>
+<span style="margin-left:auto" id="exitInfo"></span>
 </div>
 <div class="tabs">
 <button class="active" id="tabNodes" onclick="setTab('nodes')">Nodes</button>
@@ -164,8 +166,16 @@ return '<tr>'
 if(window.lucide)lucide.createIcons();
 }
 async function selectNode(n){
+const btn=document.getElementById('tunnelState');
 await api('/proxies/'+encodeURIComponent(selector),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});
 now=n;renderNodes();
+// The kernel only rebuilds routing on a fresh tunnel, so reconnect so the
+// switch takes effect on live traffic (mirrors manual disconnect+connect).
+btn.textContent='switching...';
+try{
+await fetch('/tunnel?action=reconnect',{method:'POST'});
+}catch(e){}
+setTimeout(pollTunnel,2000);
 }
 async function testOne(n){
 testing[n]=true;renderNodes();
@@ -193,6 +203,20 @@ renderNodes();
 btn.textContent=d.best?'best: '+displayLabel(d.best.name)+' ('+d.best.delay+'ms)':'best: all failed';
 }catch(e){btn.textContent='best: error';}
 finally{btn.disabled=false;setTimeout(()=>{btn.textContent='best';},3000);}
+}
+async function checkExit(){
+const btn=document.getElementById('exitBtn');
+const out=document.getElementById('exitInfo');
+btn.disabled=true;btn.textContent='checking...';
+try{
+const r=await fetch('/exit');
+const d=await r.json();
+if(d.error){out.textContent='exit: '+d.error;}
+else{
+out.textContent='exit: '+d.ip+' · '+(d.city||'')+(d.country?' ('+d.country+')':'')+(d.org?' ['+d.org+']':'')+' tunnel:'+(d.tunnel?d.tunnel.state:'?');
+}
+}catch(e){out.textContent='exit: error';}
+finally{btn.disabled=false;btn.textContent='exit ip';}
 }
 function setTab(t){
 tab=t;
