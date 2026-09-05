@@ -5,7 +5,7 @@ CLASH ?= http://127.0.0.1:9090
 # Extract just the port number for lsof checks.
 ADDR_PORT := $(lastword $(subst :, ,$(ADDR)))
 
-.PHONY: build run frontend-dev stop test vet clean
+.PHONY: build run run-bg frontend-dev stop test vet clean
 
 build:
 	npm --prefix frontend run build
@@ -13,6 +13,9 @@ build:
 
 run: build
 	./$(BIN) -addr $(ADDR) -clash $(CLASH)
+
+run-bg: build
+	nohup ./$(BIN) -addr $(ADDR) -clash $(CLASH) >/dev/null 2>&1 &
 
 frontend-dev:
 	npm --prefix frontend run dev
